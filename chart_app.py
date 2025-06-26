@@ -14,6 +14,13 @@ app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 # 初始化Binance客户端
 binance_client = BinanceClient()
 
+# 获取所有交易对
+print("正在获取交易对列表...")
+all_symbols = binance_client.get_all_symbols()
+symbol_options = [{'label': f"{symbol['baseAsset']}/USDT ({symbol['symbol']})", 'value': symbol['symbol']} 
+                  for symbol in all_symbols]
+print(f"已获取 {len(symbol_options)} 个交易对")
+
 # 定义布局
 app.layout = dbc.Container([
     dbc.Row([
@@ -30,11 +37,14 @@ app.layout = dbc.Container([
                     dbc.Row([
                         dbc.Col([
                             dbc.Label("交易对:"),
-                            dbc.Input(
-                                id="symbol-input",
-                                placeholder="输入交易对，如: BTCUSDT",
-                                value="BTCUSDT",
-                                type="text"
+                            dcc.Dropdown(
+                                id="symbol-dropdown",
+                                options=symbol_options,
+                                value="SOLUSDT",
+                                searchable=True,
+                                placeholder="搜索交易对...",
+                                clearable=False,
+                                style={'fontSize': '14px'}
                             )
                         ], width=4),
                         dbc.Col([
@@ -55,7 +65,7 @@ app.layout = dbc.Container([
                             dbc.Input(
                                 id="limit-input",
                                 type="number",
-                                value=400,
+                                value=600,
                                 min=50,
                                 max=1000
                             )
@@ -65,9 +75,9 @@ app.layout = dbc.Container([
                             dbc.Input(
                                 id="tolerance-input",
                                 type="number",
-                                value=1.0,
+                                value=3.0,
                                 min=0.1,
-                                max=5.0,
+                                max=10.0,
                                 step=0.1
                             )
                         ], width=2)
@@ -103,32 +113,39 @@ app.layout = dbc.Container([
     ])
 ], fluid=True)
 
+# 重置按钮回调
+@callback(
+    [Output('symbol-dropdown', 'value'),
+     Output('interval-dropdown', 'value'),
+     Output('limit-input', 'value'),
+     Output('tolerance-input', 'value')],
+    [Input('reset-button', 'n_clicks')],
+    prevent_initial_call=True
+)
+def reset_inputs(n_clicks):
+    if n_clicks:
+        return "SOLUSDT", "4h", 600, 3.0
+    return dash.no_update, dash.no_update, dash.no_update, dash.no_update
+
 @callback(
     [Output('kline-chart', 'figure'),
      Output('crossover-info', 'children')],
-    [Input('update-button', 'n_clicks'),
-     Input('reset-button', 'n_clicks')],
-    [dash.dependencies.State('symbol-input', 'value'),
-     dash.dependencies.State('interval-dropdown', 'value'),
-     dash.dependencies.State('limit-input', 'value'),
-     dash.dependencies.State('tolerance-input', 'value')]
+    [Input('symbol-dropdown', 'value'),
+     Input('interval-dropdown', 'value'),
+     Input('limit-input', 'value'),
+     Input('tolerance-input', 'value'),
+     Input('update-button', 'n_clicks')]
 )
-def update_chart(update_clicks, reset_clicks, symbol, interval, limit, tolerance):
-    ctx = dash.callback_context
-    
-    if not ctx.triggered:
-        # 默认加载
-        symbol = "BTCUSDT"
+def update_chart(symbol, interval, limit, tolerance, update_clicks):
+    # 如果参数为None，使用默认值
+    if symbol is None:
+        symbol = "SOLUSDT"
+    if interval is None:
         interval = "4h"
-        limit = 400
-        tolerance = 1.0
-    else:
-        trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
-        if trigger_id == 'reset-button':
-            symbol = "BTCUSDT"
-            interval = "4h"
-            limit = 400
-            tolerance = 1.0
+    if limit is None:
+        limit = 600
+    if tolerance is None:
+        tolerance = 3.0
     
     try:
         # 获取K线数据
